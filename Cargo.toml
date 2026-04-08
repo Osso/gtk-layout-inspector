@@ -23,9 +23,21 @@ optional = true
 version = "0.3"
 optional = true
 
+[dependencies.image]
+version = "0.25"
+optional = true
+
+[dependencies.base64]
+version = "0.22"
+optional = true
+
+[dependencies.libc]
+version = "0.2"
+optional = true
+
 [features]
 default = []
-server = ["tokio", "peercred-ipc", "glob"]
+server = ["tokio", "peercred-ipc", "glob", "image", "base64", "libc"]
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }
