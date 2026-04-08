@@ -283,31 +283,32 @@ impl Drop for SocketGuard {
     }
 }
 
+fn extract_socket_pid(entry: &std::path::Path) -> Option<i32> {
+    entry
+        .file_name()?
+        .to_str()?
+        .strip_prefix("gtk-debug-")?
+        .strip_suffix(".sock")?
+        .parse()
+        .ok()
+}
+
+fn is_process_alive(pid: i32) -> bool {
+    (unsafe { libc::kill(pid, 0) }) == 0
+}
+
 /// Clean up stale sockets from dead processes.
 fn cleanup_stale_sockets() {
-    let pattern = "/tmp/gtk-debug-*.sock";
-    if let Ok(entries) = glob::glob(pattern) {
-        for entry in entries.flatten() {
-            // Extract PID from filename: /tmp/gtk-debug-{pid}.sock
-            if let Some(filename) = entry.file_name().and_then(|f| f.to_str()) {
-                if let Some(pid_str) = filename
-                    .strip_prefix("gtk-debug-")
-                    .and_then(|s| s.strip_suffix(".sock"))
-                {
-                    if let Ok(pid) = pid_str.parse::<i32>() {
-                        // Check if process is still alive using kill(pid, 0)
-                        // Returns 0 if process exists, -1 with ESRCH if not
-                        let exists = unsafe { libc::kill(pid, 0) } == 0;
-                        if !exists {
-                            if std::fs::remove_file(&entry).is_ok() {
-                                eprintln!(
-                                    "[gtk-debug] Cleaned up stale socket: {}",
-                                    entry.display()
-                                );
-                            }
-                        }
-                    }
-                }
+    let Ok(entries) = glob::glob("/tmp/gtk-debug-*.sock") else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let Some(pid) = extract_socket_pid(&entry) else {
+            continue;
+        };
+        if !is_process_alive(pid) {
+            if std::fs::remove_file(&entry).is_ok() {
+                eprintln!("[gtk-debug] Cleaned up stale socket: {}", entry.display());
             }
         }
     }
@@ -378,12 +379,67 @@ pub fn init() -> (mpsc::Receiver<Command>, SocketGuard) {
 /// Re-export the receiver type for convenience.
 pub type CommandReceiver = mpsc::Receiver<Command>;
 
-async fn run_server(cmd_tx: mpsc::Sender<Command>, shutdown: Arc<AtomicBool>) {
-    use peercred_ipc::Server;
+async fn handle_string_cmd(
+    cmd_tx: &mpsc::Sender<Command>,
+    conn: &mut peercred_ipc::Connection,
+    make_cmd: impl FnOnce(oneshot::Sender<String>) -> Command,
+    timeout_secs: u64,
+    wrap: fn(String) -> Response,
+) {
+    let (tx, rx) = oneshot::channel();
+    if cmd_tx.send(make_cmd(tx)).await.is_err() {
+        let _ = conn.write(&Response::Error("App closed".into())).await;
+        return;
+    }
+    match tokio::time::timeout(std::time::Duration::from_secs(timeout_secs), rx).await {
+        Ok(Ok(data)) => {
+            let _ = conn.write(&wrap(data)).await;
+        }
+        _ => {
+            let _ = conn.write(&Response::Error("Timeout".into())).await;
+        }
+    }
+}
 
+async fn handle_result_cmd(
+    cmd_tx: &mpsc::Sender<Command>,
+    conn: &mut peercred_ipc::Connection,
+    make_cmd: impl FnOnce(oneshot::Sender<Result<(), String>>) -> Command,
+    timeout_secs: u64,
+) {
+    let (tx, rx) = oneshot::channel();
+    if cmd_tx.send(make_cmd(tx)).await.is_err() {
+        let _ = conn.write(&Response::Error("App closed".into())).await;
+        return;
+    }
+    match tokio::time::timeout(std::time::Duration::from_secs(timeout_secs), rx).await {
+        Ok(Ok(Ok(()))) => {
+            let _ = conn.write(&Response::Ok).await;
+        }
+        Ok(Ok(Err(e))) => {
+            let _ = conn.write(&Response::Error(e)).await;
+        }
+        _ => {
+            let _ = conn.write(&Response::Error("Timeout".into())).await;
+        }
+    }
+}
+
+async fn accept_connection(server: &peercred_ipc::Server) -> Option<peercred_ipc::Connection> {
+    match tokio::time::timeout(std::time::Duration::from_millis(100), server.accept()).await {
+        Ok(Ok((conn, _))) => Some(conn),
+        Ok(Err(e)) => {
+            eprintln!("[gtk-debug] Accept error: {}", e);
+            None
+        }
+        Err(_) => None,
+    }
+}
+
+async fn run_server(cmd_tx: mpsc::Sender<Command>, shutdown: Arc<AtomicBool>) {
     let path = socket_path();
 
-    let server = match Server::bind(&path) {
+    let server = match peercred_ipc::Server::bind(&path) {
         Ok(s) => {
             eprintln!("[gtk-debug] Listening on {}", path.display());
             s
@@ -400,179 +456,104 @@ async fn run_server(cmd_tx: mpsc::Sender<Command>, shutdown: Arc<AtomicBool>) {
             break;
         }
 
-        // Use timeout to periodically check shutdown flag
-        let accept_result =
-            tokio::time::timeout(std::time::Duration::from_millis(100), server.accept()).await;
-
-        let (mut conn, _caller) = match accept_result {
-            Ok(Ok((conn, caller))) => (conn, caller),
-            Ok(Err(e)) => {
-                eprintln!("[gtk-debug] Accept error: {}", e);
-                continue;
-            }
-            Err(_) => continue, // Timeout, check shutdown flag
+        let Some(mut conn) = accept_connection(&server).await else {
+            continue;
         };
 
         let request: Result<Request, _> = conn.read().await;
         match request {
             Ok(Request::Dump) => {
-                let (tx, rx) = oneshot::channel();
-                if cmd_tx.send(Command::Dump { respond: tx }).await.is_err() {
-                    let _ = conn.write(&Response::Error("App closed".into())).await;
-                    continue;
-                }
-                match tokio::time::timeout(std::time::Duration::from_secs(5), rx).await {
-                    Ok(Ok(layout)) => {
-                        let _ = conn.write(&Response::Layout(layout)).await;
-                    }
-                    _ => {
-                        let _ = conn.write(&Response::Error("Timeout".into())).await;
-                    }
-                }
+                handle_string_cmd(
+                    &cmd_tx,
+                    &mut conn,
+                    |tx| Command::Dump { respond: tx },
+                    5,
+                    Response::Layout,
+                )
+                .await;
             }
             Ok(Request::DumpJson) => {
-                let (tx, rx) = oneshot::channel();
-                if cmd_tx
-                    .send(Command::DumpJson { respond: tx })
-                    .await
-                    .is_err()
-                {
-                    let _ = conn.write(&Response::Error("App closed".into())).await;
-                    continue;
-                }
-                match tokio::time::timeout(std::time::Duration::from_secs(5), rx).await {
-                    Ok(Ok(layout)) => {
-                        let _ = conn.write(&Response::Layout(layout)).await;
-                    }
-                    _ => {
-                        let _ = conn.write(&Response::Error("Timeout".into())).await;
-                    }
-                }
+                handle_string_cmd(
+                    &cmd_tx,
+                    &mut conn,
+                    |tx| Command::DumpJson { respond: tx },
+                    5,
+                    Response::Layout,
+                )
+                .await;
             }
             Ok(Request::Input { field, value }) => {
-                let (tx, rx) = oneshot::channel();
-                if cmd_tx
-                    .send(Command::Input {
+                handle_result_cmd(
+                    &cmd_tx,
+                    &mut conn,
+                    |tx| Command::Input {
                         field,
                         value,
                         respond: tx,
-                    })
-                    .await
-                    .is_err()
-                {
-                    let _ = conn.write(&Response::Error("App closed".into())).await;
-                    continue;
-                }
-                match tokio::time::timeout(std::time::Duration::from_secs(2), rx).await {
-                    Ok(Ok(Ok(()))) => {
-                        let _ = conn.write(&Response::Ok).await;
-                    }
-                    Ok(Ok(Err(e))) => {
-                        let _ = conn.write(&Response::Error(e)).await;
-                    }
-                    _ => {
-                        let _ = conn.write(&Response::Error("Timeout".into())).await;
-                    }
-                }
+                    },
+                    2,
+                )
+                .await;
             }
             Ok(Request::Click { label }) => {
-                let (tx, rx) = oneshot::channel();
-                if cmd_tx
-                    .send(Command::Click { label, respond: tx })
-                    .await
-                    .is_err()
-                {
-                    let _ = conn.write(&Response::Error("App closed".into())).await;
-                    continue;
-                }
-                match tokio::time::timeout(std::time::Duration::from_secs(2), rx).await {
-                    Ok(Ok(Ok(()))) => {
-                        let _ = conn.write(&Response::Ok).await;
-                    }
-                    Ok(Ok(Err(e))) => {
-                        let _ = conn.write(&Response::Error(e)).await;
-                    }
-                    _ => {
-                        let _ = conn.write(&Response::Error("Timeout".into())).await;
-                    }
-                }
+                handle_result_cmd(
+                    &cmd_tx,
+                    &mut conn,
+                    |tx| Command::Click { label, respond: tx },
+                    2,
+                )
+                .await;
             }
             Ok(Request::Submit) => {
-                let (tx, rx) = oneshot::channel();
-                if cmd_tx.send(Command::Submit { respond: tx }).await.is_err() {
-                    let _ = conn.write(&Response::Error("App closed".into())).await;
-                    continue;
-                }
-                match tokio::time::timeout(std::time::Duration::from_secs(2), rx).await {
-                    Ok(Ok(Ok(()))) => {
-                        let _ = conn.write(&Response::Ok).await;
-                    }
-                    Ok(Ok(Err(e))) => {
-                        let _ = conn.write(&Response::Error(e)).await;
-                    }
-                    _ => {
-                        let _ = conn.write(&Response::Error("Timeout".into())).await;
-                    }
-                }
+                handle_result_cmd(&cmd_tx, &mut conn, |tx| Command::Submit { respond: tx }, 2)
+                    .await;
             }
             Ok(Request::Ping) => {
                 let _ = conn.write(&Response::Pong).await;
             }
             Ok(Request::KeyPress { key }) => {
-                let (tx, rx) = oneshot::channel();
-                if cmd_tx
-                    .send(Command::KeyPress { key, respond: tx })
-                    .await
-                    .is_err()
-                {
-                    let _ = conn.write(&Response::Error("App closed".into())).await;
-                    continue;
-                }
-                match tokio::time::timeout(std::time::Duration::from_secs(2), rx).await {
-                    Ok(Ok(Ok(()))) => {
-                        let _ = conn.write(&Response::Ok).await;
-                    }
-                    Ok(Ok(Err(e))) => {
-                        let _ = conn.write(&Response::Error(e)).await;
-                    }
-                    _ => {
-                        let _ = conn.write(&Response::Error("Timeout".into())).await;
-                    }
-                }
+                handle_result_cmd(
+                    &cmd_tx,
+                    &mut conn,
+                    |tx| Command::KeyPress { key, respond: tx },
+                    2,
+                )
+                .await;
             }
             Ok(Request::Screenshot) => {
-                let (tx, rx) = oneshot::channel();
-                if cmd_tx
-                    .send(Command::Screenshot { respond: tx })
-                    .await
-                    .is_err()
-                {
-                    let _ = conn.write(&Response::Error("App closed".into())).await;
-                    continue;
-                }
-                match tokio::time::timeout(std::time::Duration::from_secs(5), rx).await {
-                    Ok(Ok(Ok(data))) => {
-                        // Encode as JPEG with quality 15 (matches iced-layout-inspector)
-                        match encode_screenshot_jpeg(&data, 15) {
-                            Ok(base64) => {
-                                let _ = conn.write(&Response::Screenshot(base64)).await;
-                            }
-                            Err(e) => {
-                                let _ = conn.write(&Response::Error(e)).await;
-                            }
-                        }
-                    }
-                    Ok(Ok(Err(e))) => {
-                        let _ = conn.write(&Response::Error(e)).await;
-                    }
-                    _ => {
-                        let _ = conn.write(&Response::Error("Timeout".into())).await;
-                    }
-                }
+                handle_screenshot(&cmd_tx, &mut conn).await;
             }
             Err(e) => {
                 eprintln!("[gtk-debug] Read error: {}", e);
             }
+        }
+    }
+}
+
+async fn handle_screenshot(cmd_tx: &mpsc::Sender<Command>, conn: &mut peercred_ipc::Connection) {
+    let (tx, rx) = oneshot::channel();
+    if cmd_tx
+        .send(Command::Screenshot { respond: tx })
+        .await
+        .is_err()
+    {
+        let _ = conn.write(&Response::Error("App closed".into())).await;
+        return;
+    }
+    match tokio::time::timeout(std::time::Duration::from_secs(5), rx).await {
+        Ok(Ok(Ok(data))) => match encode_screenshot_jpeg(&data, 15) {
+            Ok(base64) => {
+                let _ = conn.write(&Response::Screenshot(base64)).await;
+            }
+            Err(e) => {
+                let _ = conn.write(&Response::Error(e)).await;
+            }
+        },
+        Ok(Ok(Err(e))) => {
+            let _ = conn.write(&Response::Error(e)).await;
+        }
+        _ => {
+            let _ = conn.write(&Response::Error("Timeout".into())).await;
         }
     }
 }
