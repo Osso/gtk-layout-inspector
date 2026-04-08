@@ -30,7 +30,10 @@ pub fn find_button_by_label(widget: &impl IsA<gtk::Widget>, label: &str) -> Opti
 }
 
 /// Find an entry by its placeholder text.
-pub fn find_entry_by_placeholder(widget: &impl IsA<gtk::Widget>, placeholder: &str) -> Option<gtk::Entry> {
+pub fn find_entry_by_placeholder(
+    widget: &impl IsA<gtk::Widget>,
+    placeholder: &str,
+) -> Option<gtk::Entry> {
     find_widget(widget.as_ref(), |w| {
         w.downcast_ref::<gtk::Entry>()
             .and_then(|e| e.placeholder_text())
@@ -75,7 +78,11 @@ fn traverse_widget(widget: &gtk::Widget, depth: usize, dump: &mut LayoutDump) {
         css_classes: widget.css_classes().iter().map(|s| s.to_string()).collect(),
         widget_name: {
             let name = widget.widget_name();
-            if name.is_empty() { None } else { Some(name.to_string()) }
+            if name.is_empty() {
+                None
+            } else {
+                Some(name.to_string())
+            }
         },
         background_color: get_background_color(widget),
         foreground_color: get_foreground_color(widget),
@@ -165,10 +172,14 @@ fn identify_widget(widget: &gtk::Widget) -> WidgetInfo {
 
     // Windows
     if let Some(w) = widget.downcast_ref::<gtk::ApplicationWindow>() {
-        return WidgetInfo::Window { title: w.title().map(|s| s.to_string()) };
+        return WidgetInfo::Window {
+            title: w.title().map(|s| s.to_string()),
+        };
     }
     if let Some(w) = widget.downcast_ref::<gtk::Window>() {
-        return WidgetInfo::Window { title: w.title().map(|s| s.to_string()) };
+        return WidgetInfo::Window {
+            title: w.title().map(|s| s.to_string()),
+        };
     }
 
     // Containers
@@ -178,7 +189,9 @@ fn identify_widget(widget: &gtk::Widget) -> WidgetInfo {
             gtk::Orientation::Vertical => "vertical",
             _ => "unknown",
         };
-        return WidgetInfo::Box { orientation: orientation.to_string() };
+        return WidgetInfo::Box {
+            orientation: orientation.to_string(),
+        };
     }
 
     if widget.downcast_ref::<gtk::ScrolledWindow>().is_some() {
@@ -199,7 +212,8 @@ fn identify_widget(widget: &gtk::Widget) -> WidgetInfo {
 
     if let Some(hb) = widget.downcast_ref::<gtk::HeaderBar>() {
         return WidgetInfo::HeaderBar {
-            title: hb.title_widget()
+            title: hb
+                .title_widget()
                 .and_then(|w| w.downcast::<gtk::Label>().ok())
                 .map(|l| l.text().to_string()),
         };
@@ -211,7 +225,9 @@ fn identify_widget(widget: &gtk::Widget) -> WidgetInfo {
             gtk::Orientation::Vertical => "vertical",
             _ => "unknown",
         };
-        return WidgetInfo::Paned { orientation: orientation.to_string() };
+        return WidgetInfo::Paned {
+            orientation: orientation.to_string(),
+        };
     }
 
     if widget.downcast_ref::<gtk::Notebook>().is_some() {
@@ -235,7 +251,9 @@ fn identify_widget(widget: &gtk::Widget) -> WidgetInfo {
     }
 
     if let Some(r) = widget.downcast_ref::<gtk::Revealer>() {
-        return WidgetInfo::Revealer { revealed: r.reveals_child() };
+        return WidgetInfo::Revealer {
+            revealed: r.reveals_child(),
+        };
     }
 
     if let Some(e) = widget.downcast_ref::<gtk::Expander>() {
@@ -246,7 +264,9 @@ fn identify_widget(widget: &gtk::Widget) -> WidgetInfo {
     }
 
     if let Some(f) = widget.downcast_ref::<gtk::Frame>() {
-        return WidgetInfo::Frame { label: f.label().map(|s| s.to_string()) };
+        return WidgetInfo::Frame {
+            label: f.label().map(|s| s.to_string()),
+        };
     }
 
     if widget.downcast_ref::<gtk::AspectFrame>().is_some() {
@@ -259,7 +279,9 @@ fn identify_widget(widget: &gtk::Widget) -> WidgetInfo {
 
     // Input widgets (check before Button since some inherit from it)
     if let Some(e) = widget.downcast_ref::<gtk::SearchEntry>() {
-        return WidgetInfo::SearchEntry { text: e.text().to_string() };
+        return WidgetInfo::SearchEntry {
+            text: e.text().to_string(),
+        };
     }
 
     if widget.downcast_ref::<gtk::PasswordEntry>().is_some() {
@@ -275,7 +297,9 @@ fn identify_widget(widget: &gtk::Widget) -> WidgetInfo {
 
     if let Some(tv) = widget.downcast_ref::<gtk::TextView>() {
         let buffer = tv.buffer();
-        let text = buffer.text(&buffer.start_iter(), &buffer.end_iter(), false).to_string();
+        let text = buffer
+            .text(&buffer.start_iter(), &buffer.end_iter(), false)
+            .to_string();
         return WidgetInfo::TextView { text };
     }
 
@@ -288,7 +312,9 @@ fn identify_widget(widget: &gtk::Widget) -> WidgetInfo {
     }
 
     if let Some(sw) = widget.downcast_ref::<gtk::Switch>() {
-        return WidgetInfo::Switch { active: sw.is_active() };
+        return WidgetInfo::Switch {
+            active: sw.is_active(),
+        };
     }
 
     if let Some(cb) = widget.downcast_ref::<gtk::CheckButton>() {
@@ -306,7 +332,9 @@ fn identify_widget(widget: &gtk::Widget) -> WidgetInfo {
     }
 
     if let Some(mb) = widget.downcast_ref::<gtk::MenuButton>() {
-        return WidgetInfo::MenuButton { label: mb.label().map(|s| s.to_string()) };
+        return WidgetInfo::MenuButton {
+            label: mb.label().map(|s| s.to_string()),
+        };
     }
 
     if let Some(lb) = widget.downcast_ref::<gtk::LinkButton>() {
@@ -326,12 +354,16 @@ fn identify_widget(widget: &gtk::Widget) -> WidgetInfo {
 
     // Regular button (check after specialized buttons)
     if let Some(b) = widget.downcast_ref::<gtk::Button>() {
-        return WidgetInfo::Button { label: b.label().map(|s| s.to_string()) };
+        return WidgetInfo::Button {
+            label: b.label().map(|s| s.to_string()),
+        };
     }
 
     // Display widgets
     if let Some(l) = widget.downcast_ref::<gtk::Label>() {
-        return WidgetInfo::Label { text: l.text().to_string() };
+        return WidgetInfo::Label {
+            text: l.text().to_string(),
+        };
     }
 
     if widget.downcast_ref::<gtk::Picture>().is_some() {
@@ -343,11 +375,15 @@ fn identify_widget(widget: &gtk::Widget) -> WidgetInfo {
     }
 
     if let Some(s) = widget.downcast_ref::<gtk::Spinner>() {
-        return WidgetInfo::Spinner { spinning: s.is_spinning() };
+        return WidgetInfo::Spinner {
+            spinning: s.is_spinning(),
+        };
     }
 
     if let Some(pb) = widget.downcast_ref::<gtk::ProgressBar>() {
-        return WidgetInfo::ProgressBar { fraction: pb.fraction() };
+        return WidgetInfo::ProgressBar {
+            fraction: pb.fraction(),
+        };
     }
 
     if let Some(lb) = widget.downcast_ref::<gtk::LevelBar>() {

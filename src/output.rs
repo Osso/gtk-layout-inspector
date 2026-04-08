@@ -18,38 +18,80 @@ fn truncate_str(s: &str, max_chars: usize) -> String {
 /// Information about a widget's type and content.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum WidgetInfo {
-    Window { title: Option<String> },
-    Box { orientation: String },
-    Button { label: Option<String> },
-    Label { text: String },
-    Entry { text: String, placeholder: Option<String> },
-    TextView { text: String },
+    Window {
+        title: Option<String>,
+    },
+    Box {
+        orientation: String,
+    },
+    Button {
+        label: Option<String>,
+    },
+    Label {
+        text: String,
+    },
+    Entry {
+        text: String,
+        placeholder: Option<String>,
+    },
+    TextView {
+        text: String,
+    },
     ScrolledWindow,
     ListBox,
     ListBoxRow,
     Stack,
-    StackPage { name: Option<String> },
-    HeaderBar { title: Option<String> },
-    Paned { orientation: String },
+    StackPage {
+        name: Option<String>,
+    },
+    HeaderBar {
+        title: Option<String>,
+    },
+    Paned {
+        orientation: String,
+    },
     Notebook,
     Grid,
     FlowBox,
     Picture,
     Image,
-    Spinner { spinning: bool },
-    ProgressBar { fraction: f64 },
-    Scale { value: f64 },
-    Switch { active: bool },
-    CheckButton { active: bool, label: Option<String> },
-    ToggleButton { active: bool, label: Option<String> },
+    Spinner {
+        spinning: bool,
+    },
+    ProgressBar {
+        fraction: f64,
+    },
+    Scale {
+        value: f64,
+    },
+    Switch {
+        active: bool,
+    },
+    CheckButton {
+        active: bool,
+        label: Option<String>,
+    },
+    ToggleButton {
+        active: bool,
+        label: Option<String>,
+    },
     ComboBox,
     DropDown,
     Popover,
-    MenuButton { label: Option<String> },
-    Revealer { revealed: bool },
-    Expander { expanded: bool, label: Option<String> },
+    MenuButton {
+        label: Option<String>,
+    },
+    Revealer {
+        revealed: bool,
+    },
+    Expander {
+        expanded: bool,
+        label: Option<String>,
+    },
     Separator,
-    Frame { label: Option<String> },
+    Frame {
+        label: Option<String>,
+    },
     AspectFrame,
     Overlay,
     Fixed,
@@ -60,88 +102,102 @@ pub enum WidgetInfo {
     Calendar,
     ColorButton,
     FontButton,
-    LinkButton { uri: String, label: Option<String> },
-    LevelBar { value: f64 },
-    SearchEntry { text: String },
+    LinkButton {
+        uri: String,
+        label: Option<String>,
+    },
+    LevelBar {
+        value: f64,
+    },
+    SearchEntry {
+        text: String,
+    },
     PasswordEntry,
-    SpinButton { value: f64 },
+    SpinButton {
+        value: f64,
+    },
     /// Unknown widget type - includes the GTK type name
-    Unknown { type_name: String },
+    Unknown {
+        type_name: String,
+    },
 }
 
 impl WidgetInfo {
     /// Get a short description for display.
     pub fn short_desc(&self) -> String {
         match self {
-            Self::Window { title } => {
-                title.as_ref().map_or("Window".into(), |t| format!("Window \"{}\"", t))
-            }
+            Self::Window { title } => title
+                .as_ref()
+                .map_or("Window".into(), |t| format!("Window \"{}\"", t)),
             Self::Box { orientation } => format!("Box({})", orientation),
-            Self::Button { label } => {
-                label.as_ref().map_or("Button".into(), |l| format!("Button \"{}\"", l))
-            }
+            Self::Button { label } => label
+                .as_ref()
+                .map_or("Button".into(), |l| format!("Button \"{}\"", l)),
             Self::Label { text } => {
                 let truncated = truncate_str(text, 60);
                 format!("Label \"{}\"", truncated)
             }
-            Self::Entry { placeholder, .. } => {
-                placeholder.as_ref().map_or("Entry".into(), |p| format!("Entry [{}]", p))
-            }
+            Self::Entry { placeholder, .. } => placeholder
+                .as_ref()
+                .map_or("Entry".into(), |p| format!("Entry [{}]", p)),
             Self::TextView { .. } => "TextView".into(),
             Self::ScrolledWindow => "ScrolledWindow".into(),
             Self::ListBox => "ListBox".into(),
             Self::ListBoxRow => "ListBoxRow".into(),
             Self::Stack => "Stack".into(),
-            Self::StackPage { name } => {
-                name.as_ref().map_or("StackPage".into(), |n| format!("StackPage \"{}\"", n))
-            }
-            Self::HeaderBar { title } => {
-                title.as_ref().map_or("HeaderBar".into(), |t| format!("HeaderBar \"{}\"", t))
-            }
+            Self::StackPage { name } => name
+                .as_ref()
+                .map_or("StackPage".into(), |n| format!("StackPage \"{}\"", n)),
+            Self::HeaderBar { title } => title
+                .as_ref()
+                .map_or("HeaderBar".into(), |t| format!("HeaderBar \"{}\"", t)),
             Self::Paned { orientation } => format!("Paned({})", orientation),
             Self::Notebook => "Notebook".into(),
             Self::Grid => "Grid".into(),
             Self::FlowBox => "FlowBox".into(),
             Self::Picture => "Picture".into(),
             Self::Image => "Image".into(),
-            Self::Spinner { spinning } => format!("Spinner({})", if *spinning { "on" } else { "off" }),
+            Self::Spinner { spinning } => {
+                format!("Spinner({})", if *spinning { "on" } else { "off" })
+            }
             Self::ProgressBar { fraction } => format!("ProgressBar({:.0}%)", fraction * 100.0),
             Self::Scale { value } => format!("Scale({:.1})", value),
             Self::Switch { active } => format!("Switch({})", if *active { "on" } else { "off" }),
             Self::CheckButton { active, label } => {
                 let state = if *active { "[x]" } else { "[ ]" };
-                label.as_ref().map_or(
-                    format!("CheckButton {}", state),
-                    |l| format!("CheckButton {} \"{}\"", state, l),
-                )
+                label
+                    .as_ref()
+                    .map_or(format!("CheckButton {}", state), |l| {
+                        format!("CheckButton {} \"{}\"", state, l)
+                    })
             }
             Self::ToggleButton { active, label } => {
                 let state = if *active { "on" } else { "off" };
-                label.as_ref().map_or(
-                    format!("ToggleButton({})", state),
-                    |l| format!("ToggleButton({}) \"{}\"", state, l),
-                )
+                label
+                    .as_ref()
+                    .map_or(format!("ToggleButton({})", state), |l| {
+                        format!("ToggleButton({}) \"{}\"", state, l)
+                    })
             }
             Self::ComboBox => "ComboBox".into(),
             Self::DropDown => "DropDown".into(),
             Self::Popover => "Popover".into(),
-            Self::MenuButton { label } => {
-                label.as_ref().map_or("MenuButton".into(), |l| format!("MenuButton \"{}\"", l))
-            }
+            Self::MenuButton { label } => label
+                .as_ref()
+                .map_or("MenuButton".into(), |l| format!("MenuButton \"{}\"", l)),
             Self::Revealer { revealed } => {
                 format!("Revealer({})", if *revealed { "shown" } else { "hidden" })
             }
             Self::Expander { expanded, label } => {
                 let state = if *expanded { "open" } else { "closed" };
-                label.as_ref().map_or(
-                    format!("Expander({})", state),
-                    |l| format!("Expander({}) \"{}\"", state, l),
-                )
+                label.as_ref().map_or(format!("Expander({})", state), |l| {
+                    format!("Expander({}) \"{}\"", state, l)
+                })
             }
             Self::Separator => "Separator".into(),
-            Self::Frame { label } => {
-                label.as_ref().map_or("Frame".into(), |l| format!("Frame \"{}\"", l))
-            }
+            Self::Frame { label } => label
+                .as_ref()
+                .map_or("Frame".into(), |l| format!("Frame \"{}\"", l)),
             Self::AspectFrame => "AspectFrame".into(),
             Self::Overlay => "Overlay".into(),
             Self::Fixed => "Fixed".into(),
@@ -152,9 +208,9 @@ impl WidgetInfo {
             Self::Calendar => "Calendar".into(),
             Self::ColorButton => "ColorButton".into(),
             Self::FontButton => "FontButton".into(),
-            Self::LinkButton { label, .. } => {
-                label.as_ref().map_or("LinkButton".into(), |l| format!("LinkButton \"{}\"", l))
-            }
+            Self::LinkButton { label, .. } => label
+                .as_ref()
+                .map_or("LinkButton".into(), |l| format!("LinkButton \"{}\"", l)),
             Self::LevelBar { value } => format!("LevelBar({:.0}%)", value * 100.0),
             Self::SearchEntry { .. } => "SearchEntry".into(),
             Self::PasswordEntry => "PasswordEntry".into(),
@@ -197,9 +253,18 @@ impl LayoutEntry {
         } else {
             format!(" .{}", self.css_classes.join("."))
         };
-        let name = self.widget_name.as_ref().map_or(String::new(), |n| format!(" #{}", n));
-        let bg = self.background_color.as_ref().map_or(String::new(), |c| format!(" bg:{}", c));
-        let fg = self.foreground_color.as_ref().map_or(String::new(), |c| format!(" fg:{}", c));
+        let name = self
+            .widget_name
+            .as_ref()
+            .map_or(String::new(), |n| format!(" #{}", n));
+        let bg = self
+            .background_color
+            .as_ref()
+            .map_or(String::new(), |c| format!(" bg:{}", c));
+        let fg = self
+            .foreground_color
+            .as_ref()
+            .map_or(String::new(), |c| format!(" fg:{}", c));
 
         format!(
             "{}{} @ ({}, {}) {}x{}{}{}{}{}{}",
@@ -226,7 +291,9 @@ pub struct LayoutDump {
 
 impl LayoutDump {
     pub fn new() -> Self {
-        Self { entries: Vec::new() }
+        Self {
+            entries: Vec::new(),
+        }
     }
 
     /// Add an entry to the dump.
@@ -259,9 +326,7 @@ impl LayoutDump {
 
     /// Find buttons by label text.
     pub fn find_buttons(&self, label: &str) -> Vec<&LayoutEntry> {
-        self.find(|e| {
-            matches!(&e.info, WidgetInfo::Button { label: Some(l) } if l.contains(label))
-        })
+        self.find(|e| matches!(&e.info, WidgetInfo::Button { label: Some(l) } if l.contains(label)))
     }
 
     /// Find entries by placeholder text.
@@ -280,7 +345,11 @@ impl Default for LayoutDump {
 
 impl fmt::Display for LayoutDump {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "=== GTK Layout Dump ({} widgets) ===", self.entries.len())?;
+        writeln!(
+            f,
+            "=== GTK Layout Dump ({} widgets) ===",
+            self.entries.len()
+        )?;
         for entry in &self.entries {
             writeln!(f, "{}", entry.format_line())?;
         }

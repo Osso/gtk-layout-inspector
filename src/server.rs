@@ -51,8 +51,8 @@
 
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::sync::{mpsc, oneshot};
 
 /// Request types sent over IPC.
@@ -202,14 +202,14 @@ impl ScreenshotData {
         let tex_height = texture.height() as u32;
 
         // Save to a temporary PNG file and read back
-        let tmp_path = std::env::temp_dir().join(format!("gtk-screenshot-{}.png", std::process::id()));
+        let tmp_path =
+            std::env::temp_dir().join(format!("gtk-screenshot-{}.png", std::process::id()));
         texture
             .save_to_png(&tmp_path)
             .map_err(|e| format!("Failed to save PNG: {}", e))?;
 
         // Use the image crate to decode PNG and get RGBA pixels
-        let img = image::open(&tmp_path)
-            .map_err(|e| format!("Failed to decode PNG: {}", e))?;
+        let img = image::open(&tmp_path).map_err(|e| format!("Failed to decode PNG: {}", e))?;
 
         // Clean up temp file
         let _ = std::fs::remove_file(&tmp_path);
@@ -260,10 +260,7 @@ impl ScreenshotData {
             }
         }
 
-        Err(format!(
-            "{} (after {} attempts)",
-            last_error, max_attempts
-        ))
+        Err(format!("{} (after {} attempts)", last_error, max_attempts))
     }
 }
 
@@ -340,7 +337,12 @@ fn encode_screenshot_jpeg(data: &ScreenshotData, quality: u8) -> Result<String, 
     let mut output = Vec::new();
     let mut encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut output, quality);
     encoder
-        .encode(&rgb_img, rgb_img.width(), rgb_img.height(), image::ExtendedColorType::Rgb8)
+        .encode(
+            &rgb_img,
+            rgb_img.width(),
+            rgb_img.height(),
+            image::ExtendedColorType::Rgb8,
+        )
         .map_err(|e| format!("Failed to encode JPEG: {}", e))?;
 
     // Base64 encode
@@ -430,7 +432,11 @@ async fn run_server(cmd_tx: mpsc::Sender<Command>, shutdown: Arc<AtomicBool>) {
             }
             Ok(Request::DumpJson) => {
                 let (tx, rx) = oneshot::channel();
-                if cmd_tx.send(Command::DumpJson { respond: tx }).await.is_err() {
+                if cmd_tx
+                    .send(Command::DumpJson { respond: tx })
+                    .await
+                    .is_err()
+                {
                     let _ = conn.write(&Response::Error("App closed".into())).await;
                     continue;
                 }
