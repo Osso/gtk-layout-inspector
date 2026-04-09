@@ -15,21 +15,36 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          path: lib/gtk-layout-inspector
+
+      - uses: actions/checkout@v4
+        with:
+          repository: Osso/peercred-ipc
+          path: lib/peercred-ipc
+
+      - name: Install GTK4 dev libraries
+        run: sudo apt-get update && sudo apt-get install -y libgtk-4-dev
 
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: lib/gtk-layout-inspector
 
       - name: Check formatting
         run: cargo fmt --check
+        working-directory: lib/gtk-layout-inspector
 
       - name: Clippy
         run: cargo clippy
+        working-directory: lib/gtk-layout-inspector
 
       - name: Build
         run: cargo build
+        working-directory: lib/gtk-layout-inspector
 
       - name: Run tests
         run: cargo test
-
+        working-directory: lib/gtk-layout-inspector
