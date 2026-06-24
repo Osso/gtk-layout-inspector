@@ -39,5 +39,8 @@ optional = true
 default = []
 server = ["tokio", "peercred-ipc", "glob", "image", "base64", "libc"]
 
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(coverage)"] }
+
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }

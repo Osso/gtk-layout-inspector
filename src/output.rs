@@ -356,3 +356,266 @@ impl fmt::Display for LayoutDump {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn entry(info: WidgetInfo) -> LayoutEntry {
+        LayoutEntry {
+            depth: 0,
+            info,
+            x: 10,
+            y: 20,
+            width: 300,
+            height: 40,
+            visible: true,
+            sensitive: true,
+            css_classes: Vec::new(),
+            widget_name: None,
+            background_color: None,
+            foreground_color: None,
+        }
+    }
+
+    fn assert_short_desc(info: WidgetInfo, expected: &str) {
+        assert_eq!(info.short_desc(), expected);
+    }
+
+    #[test]
+    fn short_desc_formats_labeled_text_and_contextual_widgets() {
+        assert_short_desc(WidgetInfo::Window { title: None }, "Window");
+        assert_short_desc(
+            WidgetInfo::Window {
+                title: Some("Preferences".into()),
+            },
+            "Window \"Preferences\"",
+        );
+        assert_short_desc(
+            WidgetInfo::Button {
+                label: Some("Save".into()),
+            },
+            "Button \"Save\"",
+        );
+        assert_short_desc(
+            WidgetInfo::Label {
+                text: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789".into(),
+            },
+            "Label \"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ01234...\"",
+        );
+        assert_short_desc(
+            WidgetInfo::Label {
+                text: "éclair".into(),
+            },
+            "Label \"éclair\"",
+        );
+        assert_short_desc(
+            WidgetInfo::Entry {
+                text: "typed".into(),
+                placeholder: Some("Email".into()),
+            },
+            "Entry [Email]",
+        );
+        assert_short_desc(
+            WidgetInfo::Entry {
+                text: "typed".into(),
+                placeholder: None,
+            },
+            "Entry",
+        );
+        assert_short_desc(
+            WidgetInfo::StackPage {
+                name: Some("main".into()),
+            },
+            "StackPage \"main\"",
+        );
+        assert_short_desc(WidgetInfo::Frame { label: None }, "Frame");
+        assert_short_desc(
+            WidgetInfo::LinkButton {
+                uri: "https://example.com".into(),
+                label: Some("Docs".into()),
+            },
+            "LinkButton \"Docs\"",
+        );
+        assert_short_desc(
+            WidgetInfo::LinkButton {
+                uri: "https://example.com".into(),
+                label: None,
+            },
+            "LinkButton",
+        );
+    }
+
+    #[test]
+    fn short_desc_formats_stateful_widgets() {
+        assert_short_desc(WidgetInfo::Spinner { spinning: true }, "Spinner(on)");
+        assert_short_desc(WidgetInfo::Spinner { spinning: false }, "Spinner(off)");
+        assert_short_desc(
+            WidgetInfo::ProgressBar { fraction: 0.42 },
+            "ProgressBar(42%)",
+        );
+        assert_short_desc(WidgetInfo::LevelBar { value: 0.95 }, "LevelBar(95%)");
+        assert_short_desc(WidgetInfo::Scale { value: 12.345 }, "Scale(12.3)");
+        assert_short_desc(WidgetInfo::SpinButton { value: 7.89 }, "SpinButton(7.9)");
+        assert_short_desc(WidgetInfo::Switch { active: true }, "Switch(on)");
+        assert_short_desc(
+            WidgetInfo::CheckButton {
+                active: false,
+                label: Some("Remember".into()),
+            },
+            "CheckButton [ ] \"Remember\"",
+        );
+        assert_short_desc(
+            WidgetInfo::ToggleButton {
+                active: true,
+                label: None,
+            },
+            "ToggleButton(on)",
+        );
+        assert_short_desc(
+            WidgetInfo::Expander {
+                expanded: false,
+                label: Some("Advanced".into()),
+            },
+            "Expander(closed) \"Advanced\"",
+        );
+        assert_short_desc(WidgetInfo::Revealer { revealed: true }, "Revealer(shown)");
+        assert_short_desc(WidgetInfo::Revealer { revealed: false }, "Revealer(hidden)");
+    }
+
+    #[test]
+    fn short_desc_covers_simple_and_unknown_widgets() {
+        let cases = [
+            (
+                WidgetInfo::Box {
+                    orientation: "horizontal".into(),
+                },
+                "Box(horizontal)",
+            ),
+            (
+                WidgetInfo::Paned {
+                    orientation: "vertical".into(),
+                },
+                "Paned(vertical)",
+            ),
+            (
+                WidgetInfo::TextView {
+                    text: "ignored".into(),
+                },
+                "TextView",
+            ),
+            (WidgetInfo::ScrolledWindow, "ScrolledWindow"),
+            (WidgetInfo::ListBox, "ListBox"),
+            (WidgetInfo::ListBoxRow, "ListBoxRow"),
+            (WidgetInfo::Stack, "Stack"),
+            (
+                WidgetInfo::HeaderBar {
+                    title: Some("Title".into()),
+                },
+                "HeaderBar \"Title\"",
+            ),
+            (WidgetInfo::Notebook, "Notebook"),
+            (WidgetInfo::Grid, "Grid"),
+            (WidgetInfo::FlowBox, "FlowBox"),
+            (WidgetInfo::Picture, "Picture"),
+            (WidgetInfo::Image, "Image"),
+            (WidgetInfo::ComboBox, "ComboBox"),
+            (WidgetInfo::DropDown, "DropDown"),
+            (WidgetInfo::Popover, "Popover"),
+            (WidgetInfo::MenuButton { label: None }, "MenuButton"),
+            (WidgetInfo::Separator, "Separator"),
+            (WidgetInfo::AspectFrame, "AspectFrame"),
+            (WidgetInfo::Overlay, "Overlay"),
+            (WidgetInfo::Fixed, "Fixed"),
+            (WidgetInfo::DrawingArea, "DrawingArea"),
+            (WidgetInfo::GLArea, "GLArea"),
+            (WidgetInfo::Video, "Video"),
+            (WidgetInfo::MediaControls, "MediaControls"),
+            (WidgetInfo::Calendar, "Calendar"),
+            (WidgetInfo::ColorButton, "ColorButton"),
+            (WidgetInfo::FontButton, "FontButton"),
+            (
+                WidgetInfo::SearchEntry {
+                    text: "ignored".into(),
+                },
+                "SearchEntry",
+            ),
+            (WidgetInfo::PasswordEntry, "PasswordEntry"),
+            (
+                WidgetInfo::Unknown {
+                    type_name: "CustomWidget".into(),
+                },
+                "CustomWidget",
+            ),
+        ];
+
+        for (info, expected) in cases {
+            assert_short_desc(info, expected);
+        }
+    }
+
+    #[test]
+    fn format_line_includes_geometry_state_classes_names_and_colors() {
+        let formatted = LayoutEntry {
+            depth: 2,
+            info: WidgetInfo::Button {
+                label: Some("Run".into()),
+            },
+            x: 10,
+            y: 20,
+            width: 300,
+            height: 40,
+            visible: false,
+            sensitive: false,
+            css_classes: vec!["suggested-action".into(), "pill".into()],
+            widget_name: Some("run-button".into()),
+            background_color: Some("#112233".into()),
+            foreground_color: Some("#ddeeff".into()),
+        }
+        .format_line();
+
+        assert_eq!(
+            formatted,
+            "    Button \"Run\" @ (10, 20) 300x40 [hidden] [insensitive] .suggested-action.pill #run-button bg:#112233 fg:#ddeeff"
+        );
+    }
+
+    #[test]
+    fn dump_collects_formats_serializes_and_searches_entries() {
+        let mut dump = LayoutDump::new();
+        assert!(dump.is_empty());
+
+        dump.push(entry(WidgetInfo::Button {
+            label: Some("Save changes".into()),
+        }));
+        dump.push(entry(WidgetInfo::Entry {
+            text: "typed".into(),
+            placeholder: Some("Email address".into()),
+        }));
+        dump.push(entry(WidgetInfo::Label {
+            text: "Status".into(),
+        }));
+
+        assert_eq!(dump.len(), 3);
+        assert!(!dump.is_empty());
+        assert_eq!(dump.find_buttons("Save").len(), 1);
+        assert_eq!(dump.find_entries("Email").len(), 1);
+        assert_eq!(dump.find(|entry| entry.width == 300).len(), 3);
+
+        let json = dump.to_json();
+        assert!(json.contains("\"entries\""));
+        assert!(json.contains("Save changes"));
+
+        let text = dump.to_string();
+        assert!(text.starts_with("=== GTK Layout Dump (3 widgets) ==="));
+        assert!(text.contains("Button \"Save changes\" @ (10, 20) 300x40"));
+        assert!(text.contains("Entry [Email address] @ (10, 20) 300x40"));
+    }
+
+    #[test]
+    fn default_dump_is_empty() {
+        let dump = LayoutDump::default();
+        assert_eq!(dump.len(), 0);
+        assert!(dump.is_empty());
+    }
+}

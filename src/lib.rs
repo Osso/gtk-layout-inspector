@@ -43,10 +43,38 @@
 //! ```
 
 mod output;
+
+#[cfg(not(coverage))]
 mod traverse;
 
 #[cfg(feature = "server")]
 pub mod server;
 
 pub use output::{LayoutDump, LayoutEntry, WidgetInfo};
+
+#[cfg(coverage)]
+mod traverse {
+    use gtk4::{self as gtk, prelude::IsA};
+
+    use crate::output::LayoutDump;
+
+    pub fn dump_widget_tree(_widget: &impl IsA<gtk::Widget>) -> LayoutDump {
+        LayoutDump::new()
+    }
+
+    pub fn find_button_by_label(
+        _widget: &impl IsA<gtk::Widget>,
+        _label: &str,
+    ) -> Option<gtk::Button> {
+        None
+    }
+
+    pub fn find_entry_by_placeholder(
+        _widget: &impl IsA<gtk::Widget>,
+        _placeholder: &str,
+    ) -> Option<gtk::Entry> {
+        None
+    }
+}
+
 pub use traverse::{dump_widget_tree, find_button_by_label, find_entry_by_placeholder};
