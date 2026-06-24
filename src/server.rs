@@ -55,6 +55,8 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::sync::{mpsc, oneshot};
 
+use gtk4::prelude::TextureExt;
+
 /// Request types sent over IPC.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Request {
